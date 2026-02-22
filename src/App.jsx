@@ -18,7 +18,7 @@ import { GoalList } from './components/GoalList';
 import { AddGoalForm } from './components/AddGoalForm';
 import { Leaderboard } from './components/Leaderboard';
 import { NicknameModal } from './components/NicknameModal';
-import { Timer, Trophy, Settings, User } from 'lucide-react';
+import { Timer, Trophy, User, Settings, Upload } from 'lucide-react';
 
 function getTodayISO() {
   return new Date().toISOString().split('T')[0];
@@ -65,6 +65,7 @@ function App() {
     return localStorage.getItem('propio_nickname') || '';
   });
   const [showNicknameModal, setShowNicknameModal] = useState(false);
+  const [syncStatus, setSyncStatus] = useState(null); // null | 'syncing' | 'synced' | 'error'
 
   // --- Effects ---
 
@@ -197,6 +198,23 @@ function App() {
     setSavedEarnings(0);
     setSavedSeconds(0);
     setInitialBalance(0);
+  };
+
+  const manualSync = async () => {
+    if (!nickname) {
+      setShowNicknameModal(true);
+      return;
+    }
+    setSyncStatus('syncing');
+    try {
+      const totalEarnings = initialBalance + savedEarnings;
+      await syncToFirestore(savedSeconds, totalEarnings);
+      setSyncStatus('synced');
+      setTimeout(() => setSyncStatus(null), 3000);
+    } catch {
+      setSyncStatus('error');
+      setTimeout(() => setSyncStatus(null), 3000);
+    }
   };
 
   // --- Nickname Handlers ---
@@ -381,6 +399,40 @@ function App() {
             </div>
 
             <AddGoalForm onAddGoal={addGoal} />
+
+            {/* Manual Sync Button */}
+            <button
+              onClick={manualSync}
+              disabled={syncStatus === 'syncing'}
+              className="btn"
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                marginTop: '1rem',
+                background: syncStatus === 'synced'
+                  ? 'rgba(16, 185, 129, 0.15)'
+                  : syncStatus === 'error'
+                    ? 'rgba(239, 68, 68, 0.15)'
+                    : 'rgba(255,255,255,0.05)',
+                color: syncStatus === 'synced'
+                  ? '#10b981'
+                  : syncStatus === 'error'
+                    ? '#ef4444'
+                    : 'var(--text-secondary)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.5rem',
+                transition: 'all 0.3s ease',
+              }}
+            >
+              <Upload size={16} />
+              {syncStatus === 'syncing' ? 'Syncing...'
+                : syncStatus === 'synced' ? '✓ Synced to Leaderboard!'
+                  : syncStatus === 'error' ? 'Sync failed — try again'
+                    : 'Sync to Leaderboard'}
+            </button>
           </>
         } />
 
