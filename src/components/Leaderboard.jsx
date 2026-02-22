@@ -6,8 +6,12 @@ import {
     where,
     getDocs,
     orderBy,
+    addDoc,
+    deleteDoc,
+    doc,
+    serverTimestamp,
 } from 'firebase/firestore';
-import { Trophy, TrendingUp, TrendingDown, CalendarDays, Edit3 } from 'lucide-react';
+import { Trophy, TrendingUp, TrendingDown, CalendarDays, Edit3, UserPlus, X } from 'lucide-react';
 
 // --- Utility Functions ---
 
@@ -278,11 +282,87 @@ export function Leaderboard({ nickname, onRequestAdjustment }) {
     const [loading, setLoading] = useState(true);
     const [showAdjustmentModal, setShowAdjustmentModal] = useState(false);
 
+    // Competitors system
+    const [connections, setConnections] = useState([]); // { id, members }
+    const [competitorInput, setCompetitorInput] = useState('');
+    const [addingCompetitor, setAddingCompetitor] = useState(false);
+    const [competitorError, setCompetitorError] = useState('');
+
     const period = useMemo(() => {
         return periodType === 'biweekly' ? getBiweeklyPeriod() : getMonthlyPeriod();
     }, [periodType]);
 
     const days = useMemo(() => getDaysInRange(period.start, period.end), [period]);
+
+    // Get connected nicknames from connections
+    const connectedNicknames = useMemo(() => {
+        const names = new Set();
+        if (nickname) names.add(nickname.toLowerCase());
+        connections.forEach(conn => {
+            conn.members.forEach(m => names.add(m.toLowerCase()));
+        });
+        return names;
+    }, [connections, nickname]);
+
+    // Fetch connections for current user
+    const fetchConnections = useCallback(async () => {
+        if (!nickname) return;
+        try {
+            const q = query(
+                collection(db, 'connections'),
+                where('members', 'array-contains', nickname.toLowerCase())
+            );
+            const snapshot = await getDocs(q);
+            setConnections(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+        } catch (err) {
+            console.error('Error fetching connections:', err);
+        }
+    }, [nickname]);
+
+    useEffect(() => {
+        fetchConnections();
+    }, [fetchConnections]);
+
+    // Add a competitor
+    const addCompetitor = async () => {
+        const name = competitorInput.trim();
+        if (!name) return;
+        if (name.toLowerCase() === nickname.toLowerCase()) {
+            setCompetitorError('You can\'t add yourself!');
+            return;
+        }
+        // Check if already connected
+        if (connectedNicknames.has(name.toLowerCase())) {
+            setCompetitorError('Already connected!');
+            return;
+        }
+        setAddingCompetitor(true);
+        setCompetitorError('');
+        try {
+            await addDoc(collection(db, 'connections'), {
+                members: [nickname.toLowerCase(), name.toLowerCase()],
+                createdBy: nickname.toLowerCase(),
+                createdAt: serverTimestamp(),
+            });
+            setCompetitorInput('');
+            await fetchConnections();
+        } catch (err) {
+            console.error('Error adding competitor:', err);
+            setCompetitorError('Failed to add. Try again.');
+        } finally {
+            setAddingCompetitor(false);
+        }
+    };
+
+    // Remove a competitor
+    const removeConnection = async (connId) => {
+        try {
+            await deleteDoc(doc(db, 'connections', connId));
+            await fetchConnections();
+        } catch (err) {
+            console.error('Error removing connection:', err);
+        }
+    };
 
     // Fetch leaderboard data
     const fetchData = useCallback(async () => {
@@ -300,17 +380,26 @@ export function Leaderboard({ nickname, onRequestAdjustment }) {
 
             const snapshot = await getDocs(q);
             const fetchedData = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-            setLogs(fetchedData);
+            // Filter to only connected nicknames
+            const filtered = fetchedData.filter(log =>
+                connectedNicknames.has((log.nickname || '').toLowerCase())
+            );
+            setLogs(filtered);
         } catch (err) {
             console.error('Error fetching leaderboard:', err);
         } finally {
             setLoading(false);
         }
-    }, [period.start, period.end]);
+    }, [period.start, period.end, connectedNicknames]);
 
     useEffect(() => {
-        fetchData();
-    }, [fetchData]);
+        if (connectedNicknames.size > 0) {
+            fetchData();
+        } else {
+            setLogs([]);
+            setLoading(false);
+        }
+    }, [fetchData, connectedNicknames]);
 
     // Group by user
     const userStats = useMemo(() => {
@@ -359,6 +448,12 @@ export function Leaderboard({ nickname, onRequestAdjustment }) {
             .slice(0, 5);
     }, [logs]);
 
+    // Get other connected names for display
+    const otherConnected = connections.map(conn => {
+        const other = conn.members.find(m => m !== nickname.toLowerCase());
+        return { id: conn.id, nickname: other };
+    });
+
     return (
         <div style={{ maxWidth: '600px', margin: '0 auto', width: '100%' }}>
             {/* Header */}
@@ -369,6 +464,83 @@ export function Leaderboard({ nickname, onRequestAdjustment }) {
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: '0.25rem' }}>
                     {formatDate(period.start)} — {formatDate(period.end)}
                 </p>
+            </div>
+
+            {/* Add Competitor */}
+            <div className="card" style={{ marginBottom: '1rem' }}>
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.75rem' }}>
+                    <UserPlus size={14} style={{ verticalAlign: 'middle', marginRight: '0.4rem' }} />
+                    Add Competitor
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <input
+                        type="text"
+                        value={competitorInput}
+                        onChange={(e) => { setCompetitorInput(e.target.value); setCompetitorError(''); }}
+                        onKeyDown={(e) => e.key === 'Enter' && addCompetitor()}
+                        placeholder="Enter nickname..."
+                        style={{
+                            flex: 1,
+                            padding: '0.5rem 0.75rem',
+                            background: 'rgba(255,255,255,0.05)',
+                            border: '1px solid rgba(255,255,255,0.1)',
+                            borderRadius: '8px',
+                            color: 'var(--text-primary)',
+                            fontSize: '0.9rem',
+                            outline: 'none',
+                        }}
+                    />
+                    <button
+                        onClick={addCompetitor}
+                        disabled={addingCompetitor || !competitorInput.trim()}
+                        className="btn btn-primary"
+                        style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
+                    >
+                        {addingCompetitor ? '...' : 'Add'}
+                    </button>
+                </div>
+                {competitorError && (
+                    <div style={{ color: 'var(--color-danger)', fontSize: '0.8rem', marginTop: '0.4rem' }}>
+                        {competitorError}
+                    </div>
+                )}
+                {/* Connected list */}
+                {otherConnected.length > 0 && (
+                    <div style={{ marginTop: '0.75rem', display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                        {otherConnected.map(c => (
+                            <div key={c.id} style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.3rem',
+                                padding: '0.25rem 0.6rem',
+                                background: 'rgba(255,255,255,0.05)',
+                                borderRadius: '20px',
+                                fontSize: '0.8rem',
+                            }}>
+                                <div className="avatar-circle" style={{
+                                    backgroundColor: getAvatarColor(c.nickname),
+                                    width: 18, height: 18, fontSize: '0.5rem'
+                                }}>
+                                    {c.nickname[0].toUpperCase()}
+                                </div>
+                                <span>{c.nickname}</span>
+                                <button
+                                    onClick={() => removeConnection(c.id)}
+                                    style={{
+                                        background: 'none',
+                                        border: 'none',
+                                        color: 'var(--text-secondary)',
+                                        cursor: 'pointer',
+                                        padding: '0 0.1rem',
+                                        display: 'flex',
+                                    }}
+                                >
+                                    <X size={12} />
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                )}
             </div>
 
             {/* Period Toggle */}
@@ -391,6 +563,13 @@ export function Leaderboard({ nickname, onRequestAdjustment }) {
                 <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
                     <div className="loading-spinner" />
                     <p style={{ color: 'var(--text-secondary)', marginTop: '1rem' }}>Loading...</p>
+                </div>
+            ) : connectedNicknames.size <= 1 && otherConnected.length === 0 ? (
+                <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
+                    <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>👥</div>
+                    <p style={{ color: 'var(--text-secondary)' }}>
+                        Add a competitor above to start the race!
+                    </p>
                 </div>
             ) : userStats.length === 0 ? (
                 <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
