@@ -135,52 +135,137 @@ function AdjustmentModal({ nickname, onSubmit, onClose }) {
     );
 }
 
-// --- Mini Chart Component (Stock-style) ---
+// --- Combined Chart Component (Stock comparison style) ---
 
-function MiniChart({ data, days, color, maxValue }) {
-    if (!days.length || maxValue === 0) return null;
+function CombinedChart({ userStats, days, maxValue }) {
+    if (!days.length || maxValue === 0 || userStats.length === 0) return null;
 
-    const width = 300;
-    const height = 80;
-    const padding = { top: 5, right: 5, bottom: 5, left: 5 };
+    const width = 400;
+    const height = 180;
+    const padding = { top: 15, right: 80, bottom: 25, left: 45 };
     const chartW = width - padding.left - padding.right;
     const chartH = height - padding.top - padding.bottom;
 
-    // Build cumulative data using reduce to avoid variable reassignment lint error
-    const points = days.reduce((acc, day, i) => {
-        const entry = data.find(d => d.date === day);
-        const prevValue = acc.length > 0 ? acc[acc.length - 1].value : 0;
-        const cumulative = prevValue + (entry ? entry.totalEarnings : 0);
-        acc.push({
-            x: padding.left + (days.length > 1 ? (i / (days.length - 1)) * chartW : chartW / 2),
-            y: padding.top + chartH - (cumulative / maxValue) * chartH,
-            value: cumulative,
-        });
-        return acc;
-    }, []);
+    // Y-axis grid lines
+    const yTicks = 4;
+    const yLines = Array.from({ length: yTicks + 1 }, (_, i) => {
+        const val = (maxValue / yTicks) * i;
+        const y = padding.top + chartH - (val / maxValue) * chartH;
+        return { y, label: `$${val.toFixed(0)}` };
+    });
 
-    const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
-    const areaD = `${pathD} L ${points[points.length - 1].x} ${height - padding.bottom} L ${points[0].x} ${height - padding.bottom} Z`;
+    // Build lines for each user
+    const userLines = userStats.map(user => {
+        const color = getAvatarColor(user.nickname);
+        const points = days.reduce((acc, day, i) => {
+            const entry = user.logs.find(d => d.date === day);
+            const prevValue = acc.length > 0 ? acc[acc.length - 1].value : 0;
+            const cumulative = prevValue + (entry ? entry.totalEarnings : 0);
+            acc.push({
+                x: padding.left + (days.length > 1 ? (i / (days.length - 1)) * chartW : chartW / 2),
+                y: padding.top + chartH - (cumulative / maxValue) * chartH,
+                value: cumulative,
+            });
+            return acc;
+        }, []);
+
+        const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+        const areaD = `${pathD} L ${points[points.length - 1].x} ${padding.top + chartH} L ${points[0].x} ${padding.top + chartH} Z`;
+        const lastPoint = points[points.length - 1];
+
+        return { nickname: user.nickname, color, points, pathD, areaD, lastPoint };
+    });
 
     return (
-        <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: 80 }}>
+        <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: 'auto' }}>
             <defs>
-                <linearGradient id={`grad-${color.replace('#', '')}`} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={color} stopOpacity="0.3" />
-                    <stop offset="100%" stopColor={color} stopOpacity="0.02" />
-                </linearGradient>
+                {userLines.map(u => (
+                    <linearGradient key={u.nickname} id={`grad-${u.color.replace('#', '')}`} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={u.color} stopOpacity="0.2" />
+                        <stop offset="100%" stopColor={u.color} stopOpacity="0.02" />
+                    </linearGradient>
+                ))}
             </defs>
-            <path d={areaD} fill={`url(#grad-${color.replace('#', '')})`} />
-            <path d={pathD} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-            {points.length > 0 && (
-                <circle
-                    cx={points[points.length - 1].x}
-                    cy={points[points.length - 1].y}
-                    r="4"
-                    fill={color}
-                    filter={`drop-shadow(0 0 4px ${color})`}
+
+            {/* Y-axis grid */}
+            {yLines.map((tick, i) => (
+                <g key={i}>
+                    <line
+                        x1={padding.left} y1={tick.y}
+                        x2={padding.left + chartW} y2={tick.y}
+                        stroke="rgba(255,255,255,0.06)" strokeWidth="1"
+                    />
+                    <text
+                        x={padding.left - 6} y={tick.y + 3.5}
+                        textAnchor="end" fill="rgba(255,255,255,0.3)"
+                        fontSize="9" fontFamily="inherit"
+                    >
+                        {tick.label}
+                    </text>
+                </g>
+            ))}
+
+            {/* X-axis: just start and end dates */}
+            <text
+                x={padding.left} y={height - 4}
+                textAnchor="start" fill="rgba(255,255,255,0.3)"
+                fontSize="9" fontFamily="inherit"
+            >
+                Start
+            </text>
+            <text
+                x={padding.left + chartW} y={height - 4}
+                textAnchor="end" fill="rgba(255,255,255,0.3)"
+                fontSize="9" fontFamily="inherit"
+            >
+                Today
+            </text>
+
+            {/* Area fills (behind lines) */}
+            {userLines.map(u => (
+                <path key={`area-${u.nickname}`} d={u.areaD} fill={`url(#grad-${u.color.replace('#', '')})`} />
+            ))}
+
+            {/* Lines */}
+            {userLines.map(u => (
+                <path
+                    key={`line-${u.nickname}`}
+                    d={u.pathD}
+                    fill="none" stroke={u.color}
+                    strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
                 />
-            )}
+            ))}
+
+            {/* End dots + labels */}
+            {userLines.map(u => (
+                <g key={`label-${u.nickname}`}>
+                    <circle
+                        cx={u.lastPoint.x} cy={u.lastPoint.y}
+                        r="4" fill={u.color}
+                        filter={`drop-shadow(0 0 4px ${u.color})`}
+                    />
+                    {/* Avatar circle at end */}
+                    <circle
+                        cx={u.lastPoint.x + 16} cy={u.lastPoint.y}
+                        r="8" fill={u.color}
+                    />
+                    <text
+                        x={u.lastPoint.x + 16} y={u.lastPoint.y + 3.5}
+                        textAnchor="middle" fill="white"
+                        fontSize="8" fontWeight="bold" fontFamily="inherit"
+                    >
+                        {u.nickname[0].toUpperCase()}
+                    </text>
+                    {/* Total label */}
+                    <text
+                        x={u.lastPoint.x + 30} y={u.lastPoint.y + 3.5}
+                        textAnchor="start" fill={u.color}
+                        fontSize="10" fontWeight="600" fontFamily="inherit"
+                    >
+                        ${u.lastPoint.value.toFixed(2)}
+                    </text>
+                </g>
+            ))}
         </svg>
     );
 }
@@ -344,33 +429,16 @@ export function Leaderboard({ nickname, onRequestAdjustment }) {
                         </div>
                     )}
 
-                    {/* Chart */}
+                    {/* Combined Chart */}
                     <div className="card" style={{ marginBottom: '1rem' }}>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.75rem' }}>
-                            Earnings Progress
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
+                            📈 Earnings Race
                         </div>
-                        {userStats.map(user => (
-                            <div key={user.nickname} style={{ marginBottom: '0.75rem' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
-                                    <div className="avatar-circle" style={{
-                                        backgroundColor: getAvatarColor(user.nickname),
-                                        width: 20, height: 20, fontSize: '0.6rem'
-                                    }}>
-                                        {user.nickname[0].toUpperCase()}
-                                    </div>
-                                    <span style={{ fontSize: '0.8rem', fontWeight: '600' }}>{user.nickname}</span>
-                                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginLeft: 'auto' }}>
-                                        ${user.total.toFixed(2)}
-                                    </span>
-                                </div>
-                                <MiniChart
-                                    data={user.logs}
-                                    days={days}
-                                    color={getAvatarColor(user.nickname)}
-                                    maxValue={maxTotal}
-                                />
-                            </div>
-                        ))}
+                        <CombinedChart
+                            userStats={userStats}
+                            days={days}
+                            maxValue={maxTotal}
+                        />
                     </div>
 
                     {/* Rankings */}
