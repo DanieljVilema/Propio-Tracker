@@ -594,20 +594,7 @@ export function Leaderboard({ nickname, onRequestAdjustment }) {
                         </div>
                     )}
 
-                    {/* Refresh */}
-                    <button
-                        onClick={fetchData}
-                        className="btn"
-                        style={{
-                            width: '100%',
-                            padding: '0.75rem',
-                            background: 'var(--bg-card)',
-                            color: 'var(--text-secondary)',
-                            border: '1px solid rgba(255,255,255,0.1)',
-                        }}
-                    >
-                        🔄 Refresh
-                    </button>
+
                 </>
             )}
 
