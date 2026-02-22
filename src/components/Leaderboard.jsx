@@ -12,15 +12,17 @@ import { Trophy, TrendingUp, TrendingDown, CalendarDays, Edit3 } from 'lucide-re
 // --- Utility Functions ---
 
 function getBiweeklyPeriod(date = new Date()) {
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    const day = date.getDate();
-    const start = day <= 15
-        ? new Date(year, month, 1)
-        : new Date(year, month, 16);
-    const end = day <= 15
-        ? new Date(year, month, 15)
-        : new Date(year, month + 1, 0);
+    // Anchor: Feb 21, 2026 — pay periods are every 14 days from this date
+    const anchor = new Date(2026, 1, 21); // Month is 0-indexed: 1 = February
+    const today = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const diffMs = today.getTime() - anchor.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    // How many full 14-day cycles have passed
+    const cycleIndex = Math.floor(diffDays / 14);
+    const start = new Date(anchor);
+    start.setDate(start.getDate() + cycleIndex * 14);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 13); // 14 days inclusive
     return { start, end };
 }
 
