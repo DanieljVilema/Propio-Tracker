@@ -11,7 +11,7 @@ import {
     doc,
     serverTimestamp,
 } from 'firebase/firestore';
-import { Trophy, TrendingUp, TrendingDown, CalendarDays, Edit3, UserPlus, X } from 'lucide-react';
+import { Trophy, TrendingUp, TrendingDown, CalendarDays, Edit3, UserPlus, X, Upload } from 'lucide-react';
 
 // --- Utility Functions ---
 
@@ -276,7 +276,7 @@ function CombinedChart({ userStats, days, maxValue }) {
 
 // --- Main Leaderboard Component ---
 
-export function Leaderboard({ nickname, onRequestAdjustment }) {
+export function Leaderboard({ nickname, onRequestAdjustment, onSync, syncStatus, lastSyncTime, todayEarnings, todaySeconds }) {
     const [periodType, setPeriodType] = useState('biweekly');
     const [logs, setLogs] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -454,6 +454,27 @@ export function Leaderboard({ nickname, onRequestAdjustment }) {
         return { id: conn.id, nickname: other };
     });
 
+    // Helper: relative time since last sync
+    const getTimeSinceSync = () => {
+        if (!lastSyncTime) return 'Never synced';
+        const diff = Date.now() - new Date(lastSyncTime).getTime();
+        const mins = Math.floor(diff / 60000);
+        if (mins < 1) return 'Just now';
+        if (mins < 60) return `${mins} min ago`;
+        const hours = Math.floor(mins / 60);
+        if (hours < 24) return `${hours}h ago`;
+        return `${Math.floor(hours / 24)}d ago`;
+    };
+
+    // Handle sync + refresh
+    const handleSync = async () => {
+        if (!onSync) return;
+        const ok = await onSync();
+        if (ok) {
+            setTimeout(fetchData, 500);
+        }
+    };
+
     return (
         <div style={{ maxWidth: '600px', margin: '0 auto', width: '100%' }}>
             {/* Header */}
@@ -580,6 +601,53 @@ export function Leaderboard({ nickname, onRequestAdjustment }) {
                 </div>
             ) : (
                 <>
+                    {/* Sync Card */}
+                    {onSync && (
+                        <div className="card" style={{
+                            marginBottom: '1rem',
+                            background: syncStatus === 'synced'
+                                ? 'rgba(16, 185, 129, 0.08)'
+                                : syncStatus === 'error'
+                                    ? 'rgba(239, 68, 68, 0.08)'
+                                    : 'var(--bg-card)',
+                            transition: 'background 0.3s ease',
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                                <div>
+                                    <div style={{ fontSize: '0.85rem', fontWeight: '600' }}>
+                                        ☁️ Your data
+                                    </div>
+                                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.15rem' }}>
+                                        ${todayEarnings?.toFixed(2) || '0.00'} · {Math.floor((todaySeconds || 0) / 60)} min
+                                    </div>
+                                </div>
+                                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                                    {getTimeSinceSync()}
+                                </div>
+                            </div>
+                            <button
+                                onClick={handleSync}
+                                disabled={syncStatus === 'syncing'}
+                                className="btn btn-primary"
+                                style={{
+                                    width: '100%',
+                                    padding: '0.6rem',
+                                    fontSize: '0.85rem',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '0.5rem',
+                                }}
+                            >
+                                <Upload size={14} />
+                                {syncStatus === 'syncing' ? 'Syncing...'
+                                    : syncStatus === 'synced' ? '✓ Updated!'
+                                        : syncStatus === 'error' ? 'Failed — try again'
+                                            : 'Update My Stats'}
+                            </button>
+                        </div>
+                    )}
+
                     {/* Winner Card */}
                     {userStats.length > 0 && (
                         <div className="card winner-card" style={{ marginBottom: '1rem' }}>

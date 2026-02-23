@@ -17,8 +17,9 @@ import { CallTracker } from './components/CallTracker';
 import { GoalList } from './components/GoalList';
 import { AddGoalForm } from './components/AddGoalForm';
 import { Leaderboard } from './components/Leaderboard';
+import { MyStats } from './components/MyStats';
 import { NicknameModal } from './components/NicknameModal';
-import { Timer, Trophy, User, Settings, Upload } from 'lucide-react';
+import { Timer, Trophy, User, Settings, BarChart3 } from 'lucide-react';
 
 function getTodayISO() {
   return new Date().toISOString().split('T')[0];
@@ -66,6 +67,9 @@ function App() {
   });
   const [showNicknameModal, setShowNicknameModal] = useState(false);
   const [syncStatus, setSyncStatus] = useState(null); // null | 'syncing' | 'synced' | 'error'
+  const [lastSyncTime, setLastSyncTime] = useState(() => {
+    return localStorage.getItem('propio_last_sync') || null;
+  });
 
   // --- Effects ---
 
@@ -167,11 +171,6 @@ function App() {
     setCallStartTime(null);
     setCurrentSessionEarnings(0);
     setDurationSeconds(0);
-
-    // Auto-sync to Firestore
-    const totalEarnings = initialBalance + newSavedEarnings;
-    const totalSeconds = newSavedSeconds;
-    syncToFirestore(totalSeconds, totalEarnings);
   };
 
   const toggleCall = () => {
@@ -209,11 +208,16 @@ function App() {
     try {
       const totalEarnings = initialBalance + savedEarnings;
       await syncToFirestore(savedSeconds, totalEarnings);
+      const now = new Date().toISOString();
+      setLastSyncTime(now);
+      localStorage.setItem('propio_last_sync', now);
       setSyncStatus('synced');
       setTimeout(() => setSyncStatus(null), 3000);
+      return true; // success signal for leaderboard refresh
     } catch {
       setSyncStatus('error');
       setTimeout(() => setSyncStatus(null), 3000);
+      return false;
     }
   };
 
@@ -334,6 +338,9 @@ function App() {
         <NavLink to="/" end className={({ isActive }) => `nav-tab ${isActive ? 'active' : ''}`}>
           <Timer size={16} /> Tracker
         </NavLink>
+        <NavLink to="/stats" className={({ isActive }) => `nav-tab ${isActive ? 'active' : ''}`}>
+          <BarChart3 size={16} /> My Stats
+        </NavLink>
         <NavLink to="/leaderboard" className={({ isActive }) => `nav-tab ${isActive ? 'active' : ''}`}>
           <Trophy size={16} /> Leaderboard
         </NavLink>
@@ -399,41 +406,26 @@ function App() {
             </div>
 
             <AddGoalForm onAddGoal={addGoal} />
-
-            {/* Manual Sync Button */}
-            <button
-              onClick={manualSync}
-              disabled={syncStatus === 'syncing'}
-              className="btn"
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                marginTop: '1rem',
-                background: syncStatus === 'synced'
-                  ? 'rgba(16, 185, 129, 0.15)'
-                  : syncStatus === 'error'
-                    ? 'rgba(239, 68, 68, 0.15)'
-                    : 'rgba(255,255,255,0.05)',
-                color: syncStatus === 'synced'
-                  ? '#10b981'
-                  : syncStatus === 'error'
-                    ? '#ef4444'
-                    : 'var(--text-secondary)',
-                border: '1px solid rgba(255,255,255,0.1)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.5rem',
-                transition: 'all 0.3s ease',
-              }}
-            >
-              <Upload size={16} />
-              {syncStatus === 'syncing' ? 'Syncing...'
-                : syncStatus === 'synced' ? '✓ Synced to Leaderboard!'
-                  : syncStatus === 'error' ? 'Sync failed — try again'
-                    : 'Sync to Leaderboard'}
-            </button>
           </>
+        } />
+
+        <Route path="/stats" element={
+          nickname ? (
+            <MyStats nickname={nickname} />
+          ) : (
+            <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
+              <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📊</div>
+              <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+                Set a nickname to see your stats
+              </p>
+              <button
+                onClick={() => setShowNicknameModal(true)}
+                className="btn btn-primary"
+              >
+                Set Nickname
+              </button>
+            </div>
+          )
         } />
 
         <Route path="/leaderboard" element={
@@ -441,6 +433,11 @@ function App() {
             <Leaderboard
               nickname={nickname}
               onRequestAdjustment={handleAdjustment}
+              onSync={manualSync}
+              syncStatus={syncStatus}
+              lastSyncTime={lastSyncTime}
+              todayEarnings={totalEarnedToday}
+              todaySeconds={totalSecondsToday}
             />
           ) : (
             <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
