@@ -13,49 +13,13 @@ import {
 } from 'firebase/firestore';
 import { Trophy, TrendingUp, TrendingDown, CalendarDays, Edit3, UserPlus, X, Upload } from 'lucide-react';
 
-// --- Utility Functions ---
-
-function getBiweeklyPeriod(date = new Date()) {
-    // Anchor: Feb 21, 2026 — pay periods are every 14 days from this date
-    const anchor = new Date(2026, 1, 21); // Month is 0-indexed: 1 = February
-    const today = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-    const diffMs = today.getTime() - anchor.getTime();
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    // How many full 14-day cycles have passed
-    const cycleIndex = Math.floor(diffDays / 14);
-    const start = new Date(anchor);
-    start.setDate(start.getDate() + cycleIndex * 14);
-    const end = new Date(start);
-    end.setDate(end.getDate() + 13); // 14 days inclusive
-    return { start, end };
-}
-
-function getMonthlyPeriod(date = new Date()) {
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    return {
-        start: new Date(year, month, 1),
-        end: new Date(year, month + 1, 0),
-    };
-}
-
-function formatDate(date) {
-    return date.toLocaleDateString('es', { month: 'short', day: 'numeric' });
-}
-
-function formatDateISO(date) {
-    return date.toISOString().split('T')[0];
-}
-
-function getDaysInRange(start, end) {
-    const days = [];
-    const current = new Date(start);
-    while (current <= end) {
-        days.push(formatDateISO(current));
-        current.setDate(current.getDate() + 1);
-    }
-    return days;
-}
+import {
+    getBiweeklyPeriod,
+    getMonthlyPeriod,
+    formatDate,
+    formatDateISO,
+    getDaysInRange
+} from '../utils/dateUtils';
 
 // Avatar colors for users
 const AVATAR_COLORS = [

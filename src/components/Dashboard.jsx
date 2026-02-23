@@ -95,7 +95,7 @@ export function Dashboard({
 
                     {/* Initial Balance Config */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <label style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Start Amount ($):</label>
+                        <label style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Portal Total ($):</label>
                         <input
                             type="number"
                             step="0.01"

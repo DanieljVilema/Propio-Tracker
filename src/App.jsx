@@ -20,10 +20,7 @@ import { Leaderboard } from './components/Leaderboard';
 import { MyStats } from './components/MyStats';
 import { NicknameModal } from './components/NicknameModal';
 import { Timer, Trophy, User, Settings, BarChart3 } from 'lucide-react';
-
-function getTodayISO() {
-  return new Date().toISOString().split('T')[0];
-}
+import { getBiweeklyPeriod, getTodayISO, formatDateISO } from './utils/dateUtils';
 
 function App() {
   // --- State ---
@@ -206,16 +203,55 @@ function App() {
     }
     setSyncStatus('syncing');
     try {
+      // 1. Calculate the active Dashboard totals
       const activeEarnings = initialBalance + savedEarnings + currentSessionEarnings;
       const activeSeconds = savedSeconds + durationSeconds;
-      await syncToFirestore(activeSeconds, activeEarnings);
+
+      // 2. Fetch past days in the current biweekly period
+      const todayIso = getTodayISO();
+      const period = getBiweeklyPeriod();
+      const startStr = formatDateISO(period.start);
+      const endStr = formatDateISO(period.end);
+
+      const q = query(
+        collection(db, 'dailyLogs'),
+        where('date', '>=', startStr),
+        where('date', '<=', endStr)
+      );
+
+      const snap = await getDocs(q);
+      let pastPeriodEarnings = 0;
+      let pastPeriodSeconds = 0;
+
+      snap.docs.forEach(d => {
+        const data = d.data();
+        if (data.nickname && data.nickname.toLowerCase() === nickname.toLowerCase()) {
+          // Exclude today to find the sum of all *past* days in this period
+          if (data.date !== todayIso) {
+            pastPeriodEarnings += (data.totalEarnings || 0);
+            pastPeriodSeconds += ((data.autoMinutes || 0) * 60);
+          }
+        }
+      });
+
+      // 3. Calculate true delta for today to prevent cumulative duplication
+      const todayEarningsToSave = activeEarnings - pastPeriodEarnings;
+      const todaySecondsToSave = activeSeconds - pastPeriodSeconds;
+
+      // 4. Save exactly the calculated delta to Firestore for today
+      await syncToFirestore(
+        Math.max(0, todaySecondsToSave), // Prevents negative seconds floating point bugs
+        todayEarningsToSave
+      );
+
       const now = new Date().toISOString();
       setLastSyncTime(now);
       localStorage.setItem('propio_last_sync', now);
       setSyncStatus('synced');
       setTimeout(() => setSyncStatus(null), 3000);
       return true; // success signal for leaderboard refresh
-    } catch {
+    } catch (err) {
+      console.error('Sync failed:', err);
       setSyncStatus('error');
       setTimeout(() => setSyncStatus(null), 3000);
       return false;
