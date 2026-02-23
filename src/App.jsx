@@ -206,8 +206,9 @@ function App() {
     }
     setSyncStatus('syncing');
     try {
-      const totalEarnings = initialBalance + savedEarnings;
-      await syncToFirestore(savedSeconds, totalEarnings);
+      const activeEarnings = initialBalance + savedEarnings + currentSessionEarnings;
+      const activeSeconds = savedSeconds + durationSeconds;
+      await syncToFirestore(activeSeconds, activeEarnings);
       const now = new Date().toISOString();
       setLastSyncTime(now);
       localStorage.setItem('propio_last_sync', now);
@@ -414,7 +415,10 @@ function App() {
 
         <Route path="/stats" element={
           nickname ? (
-            <MyStats nickname={nickname} />
+            <MyStats
+              nickname={nickname}
+              lastSyncTime={lastSyncTime}
+            />
           ) : (
             <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
               <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📊</div>

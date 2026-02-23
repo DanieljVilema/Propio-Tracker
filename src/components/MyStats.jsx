@@ -146,7 +146,7 @@ function DailyBarChart({ data, days }) {
 
 // --- Main MyStats Component ---
 
-export function MyStats({ nickname }) {
+export function MyStats({ nickname, lastSyncTime }) {
     const [periodType, setPeriodType] = useState('biweekly');
     const [logs, setLogs] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -166,20 +166,26 @@ export function MyStats({ nickname }) {
 
             const q = query(
                 collection(db, 'dailyLogs'),
-                where('nickname', '==', nickname.toLowerCase()),
                 where('date', '>=', startStr),
                 where('date', '<=', endStr),
                 orderBy('date', 'asc')
             );
 
             const snapshot = await getDocs(q);
-            setLogs(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+            const allLogs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+
+            // Filter locally to avoid case sensitivity and composite index issues
+            const userLogs = allLogs.filter(
+                d => d.nickname && d.nickname.toLowerCase() === nickname.toLowerCase()
+            );
+
+            setLogs(userLogs);
         } catch (err) {
             console.error('Error fetching stats:', err);
         } finally {
             setLoading(false);
         }
-    }, [nickname, period.start, period.end]);
+    }, [nickname, period.start, period.end, lastSyncTime]);
 
     useEffect(() => {
         fetchData();
