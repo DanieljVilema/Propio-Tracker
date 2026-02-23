@@ -385,6 +385,9 @@ function App() {
               initialBalance={initialBalance}
               setInitialBalance={setInitialBalance}
               onResetEarnings={resetEarnings}
+              onSync={manualSync}
+              syncStatus={syncStatus}
+              lastSyncTime={lastSyncTime}
             />
 
             <div style={{ marginBottom: '2rem' }}>
@@ -433,11 +436,6 @@ function App() {
             <Leaderboard
               nickname={nickname}
               onRequestAdjustment={handleAdjustment}
-              onSync={manualSync}
-              syncStatus={syncStatus}
-              lastSyncTime={lastSyncTime}
-              todayEarnings={totalEarnedToday}
-              todaySeconds={totalSecondsToday}
             />
           ) : (
             <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
