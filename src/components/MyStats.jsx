@@ -17,41 +17,60 @@ import {
     getDaysInRange
 } from '../utils/dateUtils';
 
-// --- Bar Chart Component ---
+// --- Cumulative Line Chart Component ---
 
-function DailyBarChart({ data, days }) {
+function CumulativeLineChart({ data, days }) {
     if (!days.length) return null;
 
     const width = 400;
-    const height = 160;
-    const padding = { top: 15, right: 10, bottom: 30, left: 45 };
+    const height = 180;
+    const padding = { top: 15, right: 30, bottom: 25, left: 45 };
     const chartW = width - padding.left - padding.right;
     const chartH = height - padding.top - padding.bottom;
 
-    // Build daily values
-    const dailyValues = days.map(day => {
+    // Build cumulative values
+    let currentTotal = 0;
+    const points = days.map((day, i) => {
         const entry = data.find(d => d.date === day);
+        if (entry) {
+            currentTotal += (entry.totalEarnings || 0);
+        }
         return {
-            day,
-            earnings: entry ? entry.totalEarnings : 0,
-            minutes: entry ? (entry.autoMinutes || 0) : 0,
+            x: padding.left + (days.length > 1 ? (i / (days.length - 1)) * chartW : chartW / 2),
+            y: 0, // Calculated after finding maxValue
+            value: currentTotal,
+            day
         };
     });
 
-    const maxVal = Math.max(...dailyValues.map(d => d.earnings), 1);
-    const barGap = 2;
-    const barWidth = Math.max(2, (chartW - barGap * (days.length - 1)) / days.length);
+    const maxValue = Math.max(currentTotal, 1);
+
+    // Scale Y based on maxValue
+    points.forEach(p => {
+        p.y = padding.top + chartH - (p.value / maxValue) * chartH;
+    });
 
     // Y-axis ticks
     const yTicks = 4;
     const yLines = Array.from({ length: yTicks + 1 }, (_, i) => {
-        const val = (maxVal / yTicks) * i;
-        const y = padding.top + chartH - (val / maxVal) * chartH;
+        const val = (maxValue / yTicks) * i;
+        const y = padding.top + chartH - (val / maxValue) * chartH;
         return { y, label: `$${val.toFixed(0)}` };
     });
 
+    const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+    const areaD = `${pathD} L ${points[points.length - 1].x} ${padding.top + chartH} L ${points[0].x} ${padding.top + chartH} Z`;
+
     return (
-        <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: 'auto' }}>
+        <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: 'auto', overflow: 'visible' }}>
+            {/* Area Gradient */}
+            <defs>
+                <linearGradient id="area-grad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#10b981" stopOpacity="0.3" />
+                    <stop offset="100%" stopColor="#10b981" stopOpacity="0.0" />
+                </linearGradient>
+            </defs>
+
             {/* Y-axis grid */}
             {yLines.map((tick, i) => (
                 <g key={i}>
@@ -70,41 +89,37 @@ function DailyBarChart({ data, days }) {
                 </g>
             ))}
 
-            {/* Bars */}
-            {dailyValues.map((d, i) => {
-                const barH = maxVal > 0 ? (d.earnings / maxVal) * chartH : 0;
-                const x = padding.left + i * (barWidth + barGap);
-                const y = padding.top + chartH - barH;
+            {/* Area and Line */}
+            {points.length > 0 && (
+                <>
+                    <path d={areaD} fill="url(#area-grad)" />
+                    <path d={pathD} fill="none" stroke="#10b981" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
 
-                return (
-                    <g key={d.day}>
-                        <defs>
-                            <linearGradient id={`bar-grad-${i}`} x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%" stopColor="#10b981" stopOpacity="0.9" />
-                                <stop offset="100%" stopColor="#10b981" stopOpacity="0.3" />
-                            </linearGradient>
-                        </defs>
-                        <rect
-                            x={x} y={y}
-                            width={barWidth} height={barH}
-                            rx={Math.min(barWidth / 2, 3)}
-                            fill={`url(#bar-grad-${i})`}
-                        />
-                        {/* Day label on x-axis — show every few days to avoid clutter */}
-                        {(i === 0 || i === days.length - 1 || i % Math.ceil(days.length / 7) === 0) && (
-                            <text
-                                x={x + barWidth / 2}
-                                y={height - 6}
-                                textAnchor="middle"
-                                fill="rgba(255,255,255,0.3)"
-                                fontSize="8"
-                                fontFamily="inherit"
-                            >
-                                {d.day.slice(5)} {/* MM-DD */}
-                            </text>
-                        )}
-                    </g>
-                );
+                    {/* Points on the line */}
+                    {points.map((p, i) => (
+                        <circle key={i} cx={p.x} cy={p.y} r="3" fill="var(--bg-main)" stroke="#10b981" strokeWidth="2" />
+                    ))}
+                </>
+            )}
+
+            {/* X-axis labels (reduce clutter) */}
+            {points.map((p, i) => {
+                if (i === 0 || i === days.length - 1 || i % Math.ceil(days.length / 5) === 0) {
+                    return (
+                        <text
+                            key={`x-${i}`}
+                            x={p.x}
+                            y={height - 5}
+                            textAnchor="middle"
+                            fill="rgba(255,255,255,0.3)"
+                            fontSize="8"
+                            fontFamily="inherit"
+                        >
+                            {p.day.slice(5)}
+                        </text>
+                    );
+                }
+                return null;
             })}
         </svg>
     );
@@ -247,16 +262,16 @@ export function MyStats({ nickname, lastSyncTime }) {
                         </div>
                     </div>
 
-                    {/* Daily Bar Chart */}
+                    {/* Cumulative Line Chart */}
                     <div className="card" style={{ marginBottom: '1rem' }}>
                         <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
-                            📈 Daily Earnings
+                            📈 Cumulative Earnings
                         </div>
                         {stats.totalEarnings > 0 ? (
-                            <DailyBarChart data={logs} days={days} />
+                            <CumulativeLineChart data={logs} days={days} />
                         ) : (
                             <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-                                No data yet — sync from the Leaderboard tab!
+                                No data yet — sync from the Tracker tab!
                             </div>
                         )}
                     </div>
