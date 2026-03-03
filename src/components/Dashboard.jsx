@@ -94,19 +94,24 @@ export function Dashboard({
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'flex-end' }}>
 
                     {/* Initial Balance Config */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <label style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Portal Total ($):</label>
-                        <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={initialBalanceInput}
-                            onChange={handleInitialBalanceChange}
-                            onBlur={handleInitialBalanceBlur}
-                            onKeyDown={handleInitialBalanceKeyDown}
-                            className="input"
-                            style={{ width: '80px', padding: '0.4rem' }}
-                        />
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.15rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <label style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Portal Total ($):</label>
+                            <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={initialBalanceInput}
+                                onChange={handleInitialBalanceChange}
+                                onBlur={handleInitialBalanceBlur}
+                                onKeyDown={handleInitialBalanceKeyDown}
+                                className="input"
+                                style={{ width: '80px', padding: '0.4rem' }}
+                            />
+                        </div>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textAlign: 'right', maxWidth: '200px' }}>
+                            Enter your portal earnings, then hit Sync to update the leaderboard
+                        </span>
                     </div>
 
                     {/* Rate Config */}
@@ -152,7 +157,8 @@ export function Dashboard({
                                     display: 'flex',
                                     alignItems: 'center',
                                     gap: '0.5rem',
-                                    fontWeight: '600'
+                                    fontWeight: '600',
+                                    animation: !lastSyncTime ? 'pulse 2s ease-in-out infinite' : 'none'
                                 }}
                             >
                                 <Upload size={14} />

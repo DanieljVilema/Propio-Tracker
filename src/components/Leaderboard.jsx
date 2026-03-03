@@ -559,8 +559,11 @@ export function Leaderboard({ nickname, onRequestAdjustment, onSync, syncStatus,
             ) : userStats.length === 0 ? (
                 <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
                     <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📊</div>
-                    <p style={{ color: 'var(--text-secondary)' }}>
-                        No data yet for this period. Start tracking calls!
+                    <p style={{ color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
+                        No data yet for this period.
+                    </p>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
+                        Go to the <strong style={{ color: 'var(--text-primary)' }}>Tracker</strong> tab, enter your Portal Total, and hit <strong style={{ color: 'var(--color-primary)' }}>Sync to Cloud</strong> to appear here.
                     </p>
                 </div>
             ) : (
